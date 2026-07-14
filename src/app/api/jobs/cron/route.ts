@@ -2,40 +2,31 @@ import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getDb, initDb } from '@/lib/db'
 import { DNA_PROMPT } from '@/lib/dna'
+import {
+  LANE_TITLES,
+  WATCHLIST,
+  isExcludedOpportunity,
+  applyKeywordAdjustments,
+  watchlistAndLaneBonus,
+  laneForOpportunity,
+} from '@/lib/targeting'
+import { isAustinOrRemote } from '@/lib/jobLeadsScraper'
 
 const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID!
 const ADZUNA_APP_KEY = process.env.ADZUNA_APP_KEY!
 
+// Search titles are driven by the three active lanes (Analytics/Data > FP&A > AEC-IC).
 const SEARCH_TITLES = [
-  'Chief of Staff',
-  'VP of Operations',
-  'Director of Operations',
-  'Revenue Operations Director',
-  'Head of GTM',
-  'Director of GTM Strategy',
-  'Director of Strategic Initiatives',
-  'VP Revenue Operations',
-  'Head of Revenue Operations',
-  'Director of Business Operations',
+  ...LANE_TITLES['analytics-data'],
+  ...LANE_TITLES['fpa'],
+  ...LANE_TITLES['aec-ic'],
 ]
 
-// Verified ATS board slugs — seed list. Dynamic discoveries stored in ats_companies table.
-const TARGET_COMPANIES: { slug: string; name: string; ats: 'ashby' | 'lever' | 'greenhouse' }[] = [
-  // Ashby — verified
-  { slug: 'higharc',   name: 'Higharc',   ats: 'ashby' },
-  { slug: 'sardine',   name: 'Sardine',   ats: 'ashby' },
-  { slug: 'ema',       name: 'Ema',       ats: 'ashby' },
-  { slug: 'salesloft', name: 'Salesloft', ats: 'ashby' },
-  // Greenhouse — verified
-  { slug: 'buildops',  name: 'BuildOps',  ats: 'greenhouse' },
-  { slug: 'openspace', name: 'OpenSpace', ats: 'greenhouse' },
-  { slug: 'apollo',    name: 'Apollo.io', ats: 'greenhouse' },
-  { slug: 'gongio',    name: 'Gong',      ats: 'greenhouse' },
-  { slug: 'salesloft', name: 'Salesloft', ats: 'greenhouse' },
-  { slug: 'salesmsg',  name: 'SalesMsg',  ats: 'greenhouse' },
-  { slug: 'mercury',   name: 'Mercury',   ats: 'greenhouse' },
-  { slug: 'monograph', name: 'Monograph', ats: 'greenhouse' },
-]
+// ATS board slugs — seed list. The prior GTM-era seed companies were removed
+// as part of the 2026-07 retarget. Watchlist companies are probed and verified
+// dynamically by discoverAndVerifyATSCompanies(); confirmed slugs live in the
+// ats_companies table.
+const TARGET_COMPANIES: { slug: string; name: string; ats: 'ashby' | 'lever' | 'greenhouse' }[] = []
 
 export const maxDuration = 300
 
@@ -58,9 +49,12 @@ Is this role on-site or hybrid AND located outside the Austin, TX metro area (ou
 If YES to all three: output {"score": 0, "label": "Excluded - relocation required", "summary": "Role requires relocation outside Austin TX commute area. Hard filter applied."} and stop immediately.
 Austin-metro and hybrid roles are NOT excluded here — they proceed to Step 2.
 
-STEP 2 — Only if the role passed Step 1, score it 0–100 using this rubric:
-- Role type fit (30 pts max): GTM Ops/RevOps/BizOps/AI Implementation with build = 25-30. Ops-heavy with some build = 15-24. Mixed with sales = 5-14. AE/BD/SWE/pure PM = 0-4.
-- Company stage & size (20 pts max): Seed/Series A sub-50 people = 17-20. Series B 50-100 = 12-16. 100-200 people = 6-11. 200+ or enterprise = 0-5.
+STEP 2 — Only if the role passed Step 1, check hard exclusions:
+Clayton Korte (any title) or a Clayco direct-employee conversion: output {"score": 0, "label": "Disqualified", "summary": "Excluded company. Hard filter applied."} and stop.
+
+STEP 3 — Only if the role passed Steps 1-2, score it 0–100 using this rubric:
+- Role type fit (30 pts max): Lane 1 Analytics/Data IC (Analytics Engineer, BI Developer/Engineer, Senior Data Analyst, Business Systems Analyst) = 25-30. Lane 2 FP&A IC (Senior Financial/FP&A/Corporate Finance Analyst) = 20-27. Lane 3 AEC-side IC at GC/owner/developer only (VDC, BIM, Estimator, Preconstruction) = 15-22, but 0-4 at AE firms or consultancies. Adjacent IC analytics/finance = 5-14. Deprioritized (GTM, AI Strategy/Implementation Consultant, Founding PM, Solutions Engineer, Customer Success, Lead/Head/Enablement titles), AE/BD/SWE, people manager = 0-4.
+- Company stage & size (20 pts max): Target-watchlist company or mature data/finance/VDC org with clear IC role = 17-20. Established credible company = 12-16. Early-stage or unclear = 6-11. Pre-product, AE firm, or consultancy = 0-5.
 - Remote/location (15 pts max):
     TIER 1 — 15 pts: Fully remote, no office requirement.
     TIER 2 — 12 pts: Austin-based or hybrid within 35 miles of Georgetown TX (78626). Cities in range: Austin, Round Rock, Cedar Park, Leander, Georgetown, Pflugerville, Hutto, Taylor, Buda, Kyle, San Marcos. Role must be hybrid or flexible — not 5 days/week in office.
@@ -77,7 +71,12 @@ async function scoreJobWithClaude(
   company: string,
   location: string,
   description: string
-): Promise<{ score: number; label: string; summary: string } | null> {
+): Promise<{ score: number; label: string; summary: string; lane: string | null } | null> {
+  // Hard exclusions — never surface, never score.
+  if (isExcludedOpportunity(company, title, description)) return null
+
+  const lane = laneForOpportunity(company, title)
+
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -121,16 +120,31 @@ Return ONLY a JSON object, no markdown, no preamble:
     }
     if (!parsed) return null
 
-    const score = typeof parsed.score === 'number' ? parsed.score : 0
+    const baseScore = typeof parsed.score === 'number' ? parsed.score : 0
     const label = typeof parsed.label === 'string' ? parsed.label : 'Unknown'
     // Handle AI typos in field name (summit, summery seen in prod)
-    const summary =
+    let summary =
       typeof parsed.summary === 'string' ? parsed.summary :
       typeof parsed.summit === 'string' ? parsed.summit :
       typeof parsed.summery === 'string' ? parsed.summery :
       (Object.values(parsed).find((v): v is string => typeof v === 'string' && v.length > 20) ?? '')
 
-    return { score, label, summary }
+    // Hard-filtered results pass through untouched.
+    if (baseScore === 0) return { score: 0, label, summary, lane }
+
+    // Deterministic post-LLM adjustments: red/green flag keywords, then
+    // watchlist + lane priority bonus (CJ vendor lane gets no bonus — it is
+    // surfaced separately, not blended into the main score).
+    const adjusted = applyKeywordAdjustments(baseScore, title, description)
+    const score = Math.min(100, adjusted.score + watchlistAndLaneBonus(company, title))
+    if (adjusted.redFlags.length > 0) {
+      summary += ` [Red flags: ${adjusted.redFlags.join('; ')}]`
+    }
+    if (adjusted.greenFlags.length > 0) {
+      summary += ` [Green flags: ${adjusted.greenFlags.join('; ')}]`
+    }
+
+    return { score, label, summary, lane }
   } catch {
     return null
   }
@@ -266,13 +280,13 @@ async function scrapeVibeCodeCareers(client: Anthropic, sql: any, results: Resul
           INSERT INTO job_leads (
             external_id, title, company, location,
             salary_min, salary_max, salary_display,
-            description, url, fit_score, fit_label, fit_summary, source
+            description, url, fit_score, fit_label, fit_summary, source, lane
           ) VALUES (
             ${externalId}, ${title}, ${company}, ${'Remote'},
             ${null}, ${null}, ${salaryDisplay},
             ${description.slice(0, 5000)}, ${jobUrl},
             ${scored.score}, ${scored.label}, ${scored.summary},
-            ${'vibecodecareers'}
+            ${'vibecodecareers'}, ${scored.lane}
           )
           ON CONFLICT (external_id) DO NOTHING
         `
@@ -318,7 +332,9 @@ async function fetchAshbyJobs(client: Anthropic, sql: any, results: Results) {
       bumpSource(results, 'ashby', { fetched: jobs.length })
 
       for (const job of jobs) {
-        if (!job.isRemote && job.workplaceType !== 'Remote') continue
+        const isRemote = job.isRemote || job.workplaceType === 'Remote'
+        const jobLocation = job.locationName ?? (isRemote ? 'Remote' : '')
+        if (!isAustinOrRemote(jobLocation, isRemote)) continue
 
         const externalId = `ashby-${job.id}`
         const existing = await sql`SELECT id FROM job_leads WHERE external_id = ${externalId}`
@@ -345,7 +361,7 @@ async function fetchAshbyJobs(client: Anthropic, sql: any, results: Results) {
         if (description.length < 100) continue
 
         const scored = await scoreJobWithClaude(
-          client, job.title, company.name, 'Remote', description.slice(0, 2000)
+          client, job.title, company.name, jobLocation || 'Remote', description.slice(0, 2000)
         )
         if (!scored || scored.score < 60) continue
         results.scored++
@@ -354,13 +370,13 @@ async function fetchAshbyJobs(client: Anthropic, sql: any, results: Results) {
           INSERT INTO job_leads (
             external_id, title, company, location,
             salary_min, salary_max, salary_display,
-            description, url, fit_score, fit_label, fit_summary, source
+            description, url, fit_score, fit_label, fit_summary, source, lane
           ) VALUES (
-            ${externalId}, ${job.title}, ${company.name}, ${'Remote'},
+            ${externalId}, ${job.title}, ${company.name}, ${jobLocation || 'Remote'},
             ${salaryMin}, ${salaryMax}, ${salaryDisplay},
             ${description.slice(0, 5000)}, ${job.jobUrl},
             ${scored.score}, ${scored.label}, ${scored.summary},
-            ${'ashby'}
+            ${'ashby'}, ${scored.lane}
           )
           ON CONFLICT (external_id) DO NOTHING
         `
@@ -403,7 +419,7 @@ async function fetchLeverJobs(client: Anthropic, sql: any, results: Results) {
         const isRemote =
           job.workplaceType === 'remote' ||
           (job.categories?.location ?? '').toLowerCase().includes('remote')
-        if (!isRemote) continue
+        if (!isAustinOrRemote(job.categories?.location ?? '', isRemote)) continue
 
         const externalId = `lever-${job.id}`
         const existing = await sql`SELECT id FROM job_leads WHERE external_id = ${externalId}`
@@ -438,13 +454,13 @@ async function fetchLeverJobs(client: Anthropic, sql: any, results: Results) {
           INSERT INTO job_leads (
             external_id, title, company, location,
             salary_min, salary_max, salary_display,
-            description, url, fit_score, fit_label, fit_summary, source
+            description, url, fit_score, fit_label, fit_summary, source, lane
           ) VALUES (
             ${externalId}, ${job.text}, ${company.name}, ${jobLocation},
             ${salaryMin}, ${salaryMax}, ${salaryDisplay},
             ${description.slice(0, 5000)}, ${job.hostedUrl ?? job.applyUrl},
             ${scored.score}, ${scored.label}, ${scored.summary},
-            ${'lever'}
+            ${'lever'}, ${scored.lane}
           )
           ON CONFLICT (external_id) DO NOTHING
         `
@@ -487,7 +503,7 @@ async function fetchGreenhouseJobs(client: Anthropic, sql: any, results: Results
       for (const job of jobs) {
         const locationStr = (job.location?.name ?? '').toLowerCase()
         const isRemote = locationStr.includes('remote') || locationStr.includes('anywhere')
-        if (!isRemote) continue
+        if (!isAustinOrRemote(job.location?.name ?? '', isRemote)) continue
 
         const externalId = `greenhouse-${job.id}`
         const existing = await sql`SELECT id FROM job_leads WHERE external_id = ${externalId}`
@@ -511,13 +527,13 @@ async function fetchGreenhouseJobs(client: Anthropic, sql: any, results: Results
           INSERT INTO job_leads (
             external_id, title, company, location,
             salary_min, salary_max, salary_display,
-            description, url, fit_score, fit_label, fit_summary, source
+            description, url, fit_score, fit_label, fit_summary, source, lane
           ) VALUES (
             ${externalId}, ${job.title}, ${company.name}, ${jobLocation},
             ${null}, ${null}, ${null},
             ${description.slice(0, 5000)}, ${job.absolute_url},
             ${scored.score}, ${scored.label}, ${scored.summary},
-            ${'greenhouse'}
+            ${'greenhouse'}, ${scored.lane}
           )
           ON CONFLICT (external_id) DO NOTHING
         `
@@ -589,13 +605,13 @@ async function fetchAecTechJobsRSS(client: Anthropic, sql: any, results: Results
         INSERT INTO job_leads (
           external_id, title, company, location,
           salary_min, salary_max, salary_display,
-          description, url, fit_score, fit_label, fit_summary, source
+          description, url, fit_score, fit_label, fit_summary, source, lane
         ) VALUES (
           ${externalId}, ${jobTitle}, ${company}, ${'Remote'},
           ${null}, ${null}, ${null},
           ${description.slice(0, 5000)}, ${url},
           ${scored.score}, ${scored.label}, ${scored.summary},
-          ${'aectechjobs'}
+          ${'aectechjobs'}, ${scored.lane}
         )
         ON CONFLICT (external_id) DO NOTHING
       `
@@ -612,45 +628,14 @@ async function fetchAecTechJobsRSS(client: Anthropic, sql: any, results: Results
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function discoverAndVerifyATSCompanies(sql: any, results: Results) {
-  const companyNames: string[] = []
-
-  // Step A: Procore marketplace for AEC company names
-  try {
-    const res = await fetch('https://marketplace.procore.com/apps?category=all', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Accept': 'text/html',
-      },
-    })
-    if (res.ok) {
-      const html = await res.text()
-      Array.from(html.matchAll(/"name"\s*:\s*"([^"]{3,50})"/g)).forEach(match => {
-        const name = match[1].trim()
-        if (name && !name.includes('\\') && /^[A-Za-z]/.test(name)) {
-          companyNames.push(name)
-        }
-      })
-    }
-  } catch (err) {
-    results.errors.push(`Procore discovery error: ${String(err)}`)
-  }
-
-  // Step B: Known AEC-tech and GTM companies to probe
-  const additionalCompanies = [
-    'Dusty Robotics', 'Versatile', 'Constraint', 'Buildots',
-    'Reconstruct', 'Holobuilder', 'Multivista', 'Fieldwire',
-    'PlanGrid', 'Procore', 'Autodesk', 'Bluebeam', 'Newforma',
-    'InEight', 'Kahua', 'Corecon', 'eSUB', 'Projectmates',
-    'Constructive', 'Finalform', 'Trunk Tools', 'Kojo',
-    'Constrafor', 'Billd', 'Levelset', 'Rabbet', 'Honest Buildings',
-    'Northspyre', 'Aquifer', 'Higharc', 'Monograph', 'Forma',
-    'Spacemaker', 'Swapp', 'Archistar', 'TestFit', 'Hypar',
-    'Clari', 'Gong', 'Outreach', 'Salesloft', 'Apollo',
-    'People AI', 'Chorus', 'Jiminny', 'Wingman', 'Refine Labs',
-    'Commsor', 'Common Room', 'Crossbeam', 'Partnerstack',
-    'Reveal', 'Allbound', 'Impartner', 'Channeltivity',
+  // Probe list = the target company watchlist (Analytics/Data + CJ vendor
+  // lanes). The prior GTM/AEC-tech discovery list and Procore-marketplace
+  // name harvesting were removed in the 2026-07 retarget — the watchlist is
+  // now explicit, not discovered.
+  const companyNames: string[] = [
+    ...WATCHLIST['analytics-data'],
+    ...WATCHLIST['cj-vendor'],
   ]
-  companyNames.push(...additionalCompanies)
 
   const uniqueNames = Array.from(new Set(companyNames))
 
@@ -807,13 +792,13 @@ async function fetchYCFallback(client: Anthropic, sql: any, results: Results) {
           INSERT INTO job_leads (
             external_id, title, company, location,
             salary_min, salary_max, salary_display,
-            description, url, fit_score, fit_label, fit_summary, source
+            description, url, fit_score, fit_label, fit_summary, source, lane
           ) VALUES (
             ${externalId}, ${title}, ${company}, ${'Remote'},
             ${null}, ${null}, ${null},
             ${description.slice(0, 5000)}, ${jobUrl},
             ${scored.score}, ${scored.label}, ${scored.summary},
-            ${'ycombinator'}
+            ${'ycombinator'}, ${scored.lane}
           )
           ON CONFLICT (external_id) DO NOTHING
         `
@@ -892,13 +877,13 @@ async function fetchYCJobs(client: Anthropic, sql: any, results: Results) {
         INSERT INTO job_leads (
           external_id, title, company, location,
           salary_min, salary_max, salary_display,
-          description, url, fit_score, fit_label, fit_summary, source
+          description, url, fit_score, fit_label, fit_summary, source, lane
         ) VALUES (
           ${externalId}, ${title}, ${company}, ${'Remote'},
           ${null}, ${null}, ${null},
           ${description.slice(0, 5000)}, ${jobUrl},
           ${scored.score}, ${scored.label}, ${scored.summary},
-          ${'ycombinator'}
+          ${'ycombinator'}, ${scored.lane}
         )
         ON CONFLICT (external_id) DO NOTHING
       `
@@ -982,7 +967,7 @@ export async function GET(request: NextRequest) {
             INSERT INTO job_leads (
               external_id, title, company, location,
               salary_min, salary_max, salary_display,
-              description, url, fit_score, fit_label, fit_summary, source
+              description, url, fit_score, fit_label, fit_summary, source, lane
             ) VALUES (
               ${String(job.id)},
               ${job.title},
@@ -992,7 +977,7 @@ export async function GET(request: NextRequest) {
               ${description},
               ${job.redirect_url},
               ${scored.score}, ${scored.label}, ${scored.summary},
-              ${'adzuna'}
+              ${'adzuna'}, ${scored.lane}
             )
             ON CONFLICT (external_id) DO NOTHING
           `

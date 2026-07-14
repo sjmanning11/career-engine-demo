@@ -12,12 +12,17 @@ export async function GET(request: NextRequest) {
   await initDb()
   const sql = getDb()
 
+  // Historical rows are preserved in the table, but excluded companies are
+  // never surfaced (Clayton Korte under any title; Clayco direct-employee
+  // conversions).
   const jobs = await sql`
     SELECT
       id, title, company, location, salary_display,
       url, fit_score, fit_label, fit_summary,
-      date_found, status, description
+      date_found, status, description, lane
     FROM job_leads
+    WHERE company !~* '\\yclayton\\s*korte\\y'
+      AND company !~* '\\yclayco\\y'
     ORDER BY fit_score DESC, date_found DESC
     LIMIT 100
   `

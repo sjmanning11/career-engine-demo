@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getDb, initDb } from '@/lib/db'
 import { DNA_PROMPT } from '@/lib/dna'
 import { scrapeAllTargets, type JobLead } from '@/lib/jobLeadsScraper'
+import { isExcludedOpportunity, applyKeywordAdjustments, watchlistAndLaneBonus, laneForOpportunity } from '@/lib/targeting'
 
 export const maxDuration = 300
 
@@ -16,9 +17,13 @@ explicitly state remote work is available?
 If YES to all three: output {"score": 0, "label": "Excluded - relocation required",
 "summary": "Role requires relocation outside Austin TX. Hard filter applied."} and stop.
 
-STEP 2 — Score 0-100 using this rubric:
-- Role type fit (30 pts): GTM Ops/RevOps/BizOps/AI Implementation with build = 25-30. Chief of Staff/ops-heavy = 15-24. Mixed sales = 5-14. AE/BD/SWE/pure PM = 0-4.
-- Company stage & size (20 pts): Seed/Series A sub-50 = 17-20. Series B 50-100 = 12-16. 100-200 = 6-11. 200+ or enterprise = 0-5.
+STEP 2 — Hard exclusions: Clayton Korte (any title) or a Clayco direct-employee
+conversion: output {"score": 0, "label": "Disqualified", "summary": "Excluded
+company. Hard filter applied."} and stop.
+
+STEP 3 — Score 0-100 using this rubric:
+- Role type fit (30 pts): Lane 1 Analytics/Data IC (Analytics Engineer, BI Developer/Engineer, Senior Data Analyst, Business Systems Analyst) = 25-30. Lane 2 FP&A IC (Senior Financial/FP&A/Corporate Finance Analyst) = 20-27. Lane 3 AEC-side IC at GC/owner/developer only (VDC, BIM, Estimator, Preconstruction) = 15-22, but 0-4 at AE firms or consultancies. Adjacent IC analytics/finance = 5-14. Deprioritized (GTM, AI Strategy/Implementation Consultant, Founding PM, Solutions Engineer, Customer Success, Lead/Head/Enablement titles), AE/BD/SWE, people manager = 0-4.
+- Company stage & size (20 pts): Target-watchlist company or mature data/finance/VDC org with clear IC role = 17-20. Established credible company = 12-16. Early-stage or unclear = 6-11. Pre-product, AE firm, or consultancy = 0-5.
 - Remote/location (15 pts): Fully remote = 15. Austin hybrid within 35 miles of Georgetown TX = 12. Austin unclear policy = 6. Relocation or 5-day in-office = 0.
 - Compensation signal (15 pts): $180K+ stated = 13-15. $150-180K = 9-12. $120-150K with equity = 4-8. Below $120K = 0-3.
 - Build ownership (10 pts): Owns building from zero = 9-10. Significant build component = 6-8. Some tooling = 3-5. Advisory/management only = 0-2.
@@ -34,6 +39,9 @@ async function scoreJob(
   location: string,
   description: string,
 ): Promise<{ score: number; label: string; summary: string } | null> {
+  // Hard exclusions — never surface, never score.
+  if (isExcludedOpportunity(company, title, description)) return null
+
   try {
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -56,11 +64,20 @@ DESCRIPTION: ${description.slice(0, 2_000)}`,
     const end   = raw.lastIndexOf('}')
     if (start === -1 || end <= start) return null
     const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>
-    return {
-      score:   typeof parsed.score   === 'number' ? parsed.score   : 0,
-      label:   typeof parsed.label   === 'string' ? parsed.label   : 'Unknown',
-      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
-    }
+    const baseScore = typeof parsed.score === 'number' ? parsed.score : 0
+    const label     = typeof parsed.label === 'string' ? parsed.label : 'Unknown'
+    let summary     = typeof parsed.summary === 'string' ? parsed.summary : ''
+
+    if (baseScore === 0) return { score: 0, label, summary }
+
+    // Deterministic post-LLM adjustments: red/green flag keywords, then
+    // watchlist + lane priority bonus (CJ vendor lane gets no bonus).
+    const adjusted = applyKeywordAdjustments(baseScore, title, description)
+    const score = Math.min(100, adjusted.score + watchlistAndLaneBonus(company, title))
+    if (adjusted.redFlags.length > 0)   summary += ` [Red flags: ${adjusted.redFlags.join('; ')}]`
+    if (adjusted.greenFlags.length > 0) summary += ` [Green flags: ${adjusted.greenFlags.join('; ')}]`
+
+    return { score, label, summary }
   } catch {
     return null
   }
@@ -76,13 +93,14 @@ async function upsertLead(sql: ReturnType<typeof import('@/lib/db')['getDb']>, l
       salary_min, salary_max, salary_display,
       description, url, source, status, date_found,
       fit_score, fit_label, fit_summary,
-      location_unverified, requires_manual_review
+      location_unverified, requires_manual_review, lane
     ) VALUES (
       ${lead.externalId}, ${lead.title}, ${lead.company}, ${lead.location},
       ${null}, ${null}, ${null},
       ${lead.description || null}, ${lead.applyUrl}, ${lead.source}, 'new', NOW(),
       ${scored?.score ?? null}, ${scored?.label ?? null}, ${scored?.summary ?? null},
-      ${lead.locationUnverified}, ${lead.requiresManualReview}
+      ${lead.locationUnverified}, ${lead.requiresManualReview},
+      ${lead.lane ?? laneForOpportunity(lead.company, lead.title)}
     )
     ON CONFLICT (external_id) DO UPDATE SET
       title                 = EXCLUDED.title,
@@ -93,7 +111,8 @@ async function upsertLead(sql: ReturnType<typeof import('@/lib/db')['getDb']>, l
       fit_label             = COALESCE(EXCLUDED.fit_label, job_leads.fit_label),
       fit_summary           = COALESCE(EXCLUDED.fit_summary, job_leads.fit_summary),
       location_unverified   = EXCLUDED.location_unverified,
-      requires_manual_review = EXCLUDED.requires_manual_review
+      requires_manual_review = EXCLUDED.requires_manual_review,
+      lane                  = EXCLUDED.lane
   `
 }
 
@@ -112,6 +131,12 @@ async function runRefresh(isCron = false): Promise<Response> {
   const MAX_CLAUDE_CALLS = 10
 
   for (const lead of leads) {
+    // Hard exclusions — never store or surface these opportunities at all.
+    if (isExcludedOpportunity(lead.company, lead.title, lead.description)) {
+      skipped++
+      continue
+    }
+
     const existing = await sql`
       SELECT id FROM job_leads WHERE external_id = ${lead.externalId}
     `
@@ -177,12 +202,14 @@ export async function GET(request: NextRequest) {
       id, external_id, title, company, location,
       url, fit_score, fit_label, fit_summary,
       date_found, status, source, description,
-      location_unverified, requires_manual_review
+      location_unverified, requires_manual_review, lane
     FROM job_leads
     WHERE (source = 'target-ashby'
         OR source = 'target-greenhouse'
         OR source = 'target-custom')
       AND fit_score >= 50
+      AND company !~* '\\yclayton\\s*korte\\y'
+      AND company !~* '\\yclayco\\y'
     ORDER BY
       fit_score DESC NULLS LAST,
       date_found DESC

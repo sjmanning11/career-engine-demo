@@ -1,4 +1,5 @@
 import { parse as parseHtml } from 'node-html-parser'
+import type { Lane } from '@/lib/targeting'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,36 +15,45 @@ export type JobLead = {
   description: string
   scrapedAt: string
   source: 'target-ashby' | 'target-greenhouse' | 'target-custom'
+  lane: Lane
 }
 
-type AshbyTarget      = { name: string; type: 'ashby';      slug: string }
-type GreenhouseTarget = { name: string; type: 'greenhouse'; slug: string }
-type CustomTarget     = { name: string; type: 'custom';     url: string  }
+type AshbyTarget      = { name: string; type: 'ashby';      slug: string; lane: Lane }
+type GreenhouseTarget = { name: string; type: 'greenhouse'; slug: string; lane: Lane }
+type CustomTarget     = { name: string; type: 'custom';     url: string;  lane: Lane }
 type Target = AshbyTarget | GreenhouseTarget | CustomTarget
 
-// ── Target company list ───────────────────────────────────────────────────────
+// ── Target company watchlist (2026-07 retarget) ──────────────────────────────
+// Grouped by lane. Analytics/Data is the primary lane; the CJ vendor lane is
+// exploratory and surfaced separately. Custom career-page URLs degrade
+// gracefully to manual-review placeholders if a scrape fails.
 
 export const TARGETS: Target[] = [
-  // TYPE A — Ashby (public JSON API)
-  { name: 'Jasper AI',            type: 'ashby',      slug: 'Jasper%20AI'          },
-  { name: 'Boon',                 type: 'ashby',      slug: 'boon'                 },
-  { name: 'Unlimited Industries', type: 'ashby',      slug: 'unlimitedindustries'  },
+  // ── Analytics / Data lane (also serves FP&A roles at the same employers) ──
+  { name: 'Procore',                     type: 'custom', url: 'https://careers.procore.com',                      lane: 'analytics-data' },
+  { name: 'Autodesk',                    type: 'custom', url: 'https://www.autodesk.com/careers',                 lane: 'analytics-data' },
+  { name: 'Document Crunch',             type: 'custom', url: 'https://www.documentcrunch.com/careers#open-roles', lane: 'analytics-data' },
+  { name: 'Billd',                       type: 'custom', url: 'https://billd.com/careers',                        lane: 'analytics-data' },
+  { name: 'Aurigo',                      type: 'custom', url: 'https://www.aurigo.com/careers/',                  lane: 'analytics-data' },
+  { name: 'Built Technologies',          type: 'custom', url: 'https://getbuilt.com/careers',                     lane: 'analytics-data' },
+  { name: 'Trimble',                     type: 'custom', url: 'https://careers.trimble.com',                      lane: 'analytics-data' },
+  { name: 'Dell',                        type: 'custom', url: 'https://jobs.dell.com',                            lane: 'analytics-data' },
+  { name: 'Samsung Austin Semiconductor', type: 'custom', url: 'https://semiconductor.samsung.com/us/sas/careers/', lane: 'analytics-data' },
+  { name: 'Texas Mutual Insurance',      type: 'custom', url: 'https://www.texasmutual.com/careers',              lane: 'analytics-data' },
+  { name: 'Apple',                       type: 'custom', url: 'https://jobs.apple.com/en-us/search?location=austin-AST', lane: 'analytics-data' },
+  { name: 'GM IT Innovation Center',     type: 'custom', url: 'https://careers.gm.com',                           lane: 'analytics-data' },
+  { name: 'Q2',                          type: 'custom', url: 'https://www.q2.com/careers',                       lane: 'analytics-data' },
+  { name: 'Indeed',                      type: 'custom', url: 'https://www.indeed.com/careers',                   lane: 'analytics-data' },
+  { name: 'Charles Schwab',              type: 'custom', url: 'https://www.schwabjobs.com',                       lane: 'analytics-data' },
+  { name: 'CoStar',                      type: 'custom', url: 'https://careers.costargroup.com',                  lane: 'analytics-data' },
+  // ERCOT: market/settlement analyst desk only — NOT control-room shift roles.
+  { name: 'ERCOT',                       type: 'custom', url: 'https://www.ercot.com/about/careers',              lane: 'analytics-data' },
 
-  // TYPE B — Greenhouse (public REST API)
-  { name: 'Qualified Health',     type: 'greenhouse', slug: 'qualifiedhealth'      },
-  { name: 'Seso Labor',           type: 'greenhouse', slug: 'sesolabor'            },
-
-  // TYPE C — Custom career pages (fetch + parse)
-  { name: 'Matter',               type: 'custom', url: 'https://www.matter.com/team'                                       },
-  { name: 'GC.ai',                type: 'custom', url: 'https://gc.ai/company/careers'                                     },
-  { name: 'Briq',                 type: 'custom', url: 'https://careers.briq.ai/#positions'                                },
-  { name: 'Document Crunch',      type: 'custom', url: 'https://www.documentcrunch.com/careers#open-roles'                 },
-  { name: 'Higharc',              type: 'custom', url: 'https://www.higharc.com/company/careers#open-positions'            },
-  { name: 'Positron AI',          type: 'custom', url: 'https://www.positron.ai/careers'                                   },
-  { name: 'Vanta',                type: 'custom', url: 'https://www.vanta.com/company/careers#open-roles'                  },
-  { name: 'VulnCheck',            type: 'custom', url: 'https://www.vulncheck.com/careers'                                 },
-  { name: 'Tabs',                 type: 'custom', url: 'https://www.tabs.com/careers#open-positions'                       },
-  { name: 'Actively AI',          type: 'custom', url: 'https://www.actively.ai/careers'                                   },
+  // ── Criminal-justice vendor lane (exploratory — surfaced separately) ──────
+  { name: 'Tyler Technologies',          type: 'custom', url: 'https://www.tylertech.com/careers',                lane: 'cj-vendor' },
+  { name: 'Axon',                        type: 'custom', url: 'https://www.axon.com/careers',                     lane: 'cj-vendor' },
+  { name: 'LexisNexis Risk Solutions',   type: 'custom', url: 'https://risk.lexisnexis.com/careers',              lane: 'cj-vendor' },
+  { name: 'Recidiviz',                   type: 'custom', url: 'https://www.recidiviz.org/careers',                lane: 'cj-vendor' },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -85,6 +95,7 @@ function manualReviewPlaceholder(
   careerUrl: string,
   reason: string,
   source: JobLead['source'],
+  lane: Lane,
   idSuffix = 'manual',
 ): JobLead {
   return {
@@ -99,6 +110,7 @@ function manualReviewPlaceholder(
     description:         reason,
     scrapedAt:           new Date().toISOString(),
     source,
+    lane,
   }
 }
 
@@ -148,6 +160,7 @@ async function scrapeAshby(target: AshbyTarget): Promise<JobLead[]> {
       description:          description.slice(0, 5_000),
       scrapedAt:            now,
       source:               'target-ashby',
+      lane:                 target.lane,
     })
   }
   return results
@@ -198,6 +211,7 @@ async function scrapeGreenhouse(target: GreenhouseTarget): Promise<JobLead[]> {
       description:          description.slice(0, 5_000),
       scrapedAt:            now,
       source:               'target-greenhouse',
+      lane:                 target.lane,
     })
   }
   return results
@@ -224,7 +238,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
       return [manualReviewPlaceholder(
         target.name, target.url,
         `Automated scrape returned HTTP ${res.status}. Visit ${target.url} directly.`,
-        source,
+        source, target.lane,
       )]
     }
     html = await res.text()
@@ -232,7 +246,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
     return [manualReviewPlaceholder(
       target.name, target.url,
       `Fetch failed: ${err instanceof Error ? err.message : String(err)}. Visit ${target.url} directly.`,
-      source,
+      source, target.lane,
     )]
   }
 
@@ -241,7 +255,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
     return [manualReviewPlaceholder(
       target.name, target.url,
       `Page returned minimal HTML (likely JS-rendered). Visit ${target.url} directly.`,
-      source,
+      source, target.lane,
       'spa',
     )]
   }
@@ -287,6 +301,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
           description:          desc.slice(0, 5_000),
           scrapedAt:            now,
           source,
+          lane:                 target.lane,
         })
       }
     } catch { /* invalid JSON-LD — skip silently */ }
@@ -302,7 +317,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
       target.name,
       `https://boards.greenhouse.io/${ghMatch[1]}`,
       `This company embeds a Greenhouse board (slug: ${ghMatch[1]}). Visit directly or add to Greenhouse targets list.`,
-      source, 'gh-embed',
+      source, target.lane, 'gh-embed',
     )]
   }
   if (leverMatch) {
@@ -310,7 +325,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
       target.name,
       `https://jobs.lever.co/${leverMatch[1]}`,
       `This company embeds a Lever board (slug: ${leverMatch[1]}). Visit directly.`,
-      source, 'lever-embed',
+      source, target.lane, 'lever-embed',
     )]
   }
 
@@ -376,6 +391,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
       description:          parentText.slice(0, 1_000),
       scrapedAt:            now,
       source,
+      lane:                 target.lane,
     })
   }
 
@@ -385,7 +401,7 @@ async function scrapeCustomPage(target: CustomTarget): Promise<JobLead[]> {
   return [manualReviewPlaceholder(
     target.name, target.url,
     `Could not parse job listings automatically (may be JS-rendered or bot-protected). Visit ${target.url} directly.`,
-    source, 'no-parse',
+    source, target.lane, 'no-parse',
   )]
 }
 
@@ -424,7 +440,7 @@ export async function scrapeAllTargets(): Promise<{ leads: JobLead[]; errors: st
       leads.push(manualReviewPlaceholder(
         target.name, careerUrl,
         `Scrape failed: ${msg}. Visit ${careerUrl} directly.`,
-        src, 'error',
+        src, target.lane, 'error',
       ))
     }
   }

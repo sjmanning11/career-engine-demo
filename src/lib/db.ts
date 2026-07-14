@@ -39,6 +39,10 @@ export async function initDb() {
     ADD COLUMN IF NOT EXISTS requires_manual_review BOOLEAN DEFAULT FALSE
   `
   await sql`
+    ALTER TABLE job_leads
+    ADD COLUMN IF NOT EXISTS lane TEXT
+  `
+  await sql`
     CREATE TABLE IF NOT EXISTS ats_companies (
       id SERIAL PRIMARY KEY,
       slug TEXT NOT NULL,

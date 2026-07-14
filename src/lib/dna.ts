@@ -42,19 +42,26 @@ PERSONALITY AND WORK STYLE
 
 Introvert who performs socially when required. Prefers to receive a problem, work in isolation, and return with a solution. Intolerant of ambiguity about what success looks like. Prefers async communication over synchronous interruption. Highly self-critical. Does not need external validation to start work, but deeply registers when completed work is ignored.
 
-TARGET ROLE TYPES — score these HIGH
+TARGET ROLE TYPES — score these HIGH (three lanes, in priority order)
 
-GTM Operations / Revenue Operations — building the operational infrastructure of go-to-market: CRM architecture, pipeline tooling, data flows, process design, and reporting systems. NOT sales execution.
+LANE 1 — ANALYTICS / DATA (primary, highest priority): Senior Analytics Engineer, BI Developer, Senior Data Analyst, Business Systems Analyst III, Senior BI Engineer. Individual-contributor roles building and owning models, dashboards, pipelines, and reporting systems.
 
-Business Operations / Chief of Staff — operational infrastructure design and execution for early-stage companies. Building the systems that run the company.
+LANE 2 — FP&A (secondary): Senior Financial Analyst, Senior FP&A Analyst, Corporate Finance Analyst III, Senior Financial Planning Analyst. Sam built a 72-month rolling forecast, KPI dashboards, budget models, valuation models, and holds an FMVA certification — this is applied, operational finance work.
 
-AI Implementation / AI Strategy — helping companies adopt, integrate, and operationalize AI tools. Must involve actual building, not just advisory.
+LANE 3 — AEC-SIDE IC (tertiary): Senior VDC Engineer, Staff BIM Specialist, Senior BIM Coordinator, Senior Estimator, Preconstruction Analyst (Senior). ONLY at general contractors, owners, or developers. Explicitly EXCLUDE these roles at architecture/engineering (AE) firms and consultancies — score AE-firm and consultancy AEC roles as poor fit regardless of title.
 
-Founding PM / Product Operations — zero-to-one product or ops infrastructure at companies under 100 people. Must include build ownership.
+These are all individual-contributor roles. IC depth is the goal, not coordination or client-facing work.
 
-AI Vibe Coding / Prompt Engineering — roles where the job is building with AI tools. Application layer, not model layer.
+DEPRIORITIZED ROLE TYPES — deliberately removed from active targeting (score LOW)
 
-People Operations / HR Systems — roles focused on building or improving operational infrastructure for people programs: performance management systems, HRIS implementation, onboarding workflows, compensation analytics, or HR data pipelines. Must involve systems design and build ownership, not policy administration or generalist HR. Score this category the same as Business Operations when the role is systems-building in nature.
+The following were targets in a prior phase and are intentionally superseded. Do NOT score them high:
+- GTM roles of any kind (GTM Ops, RevOps, Head of GTM, GTM strategy)
+- AI Strategy Consultant / AI Implementation Consultant
+- Founding PM / Product Operations
+- Solutions Engineer
+- Customer Success
+- Enablement roles
+- Any title containing "Lead," "Head," or "Enablement"
 
 DISQUALIFYING ROLE TYPES — score these LOW or reject
 
@@ -64,21 +71,36 @@ Pure Software Engineering — Sam is a builder but not a career SWE. No CS degre
 
 People Manager / Director of Large Teams — managing 5+ reports without significant individual build contribution.
 
-Corporate / Enterprise Roles — bureaucracy, long sales cycles, political environments, 1000+ person companies.
-
 Roles requiring daily client-facing relationship maintenance.
+
+EXPLICIT COMPANY EXCLUSIONS — hard filters, never surface
+
+Any opportunity at Clayton Korte, under any title: score 0, label DISQUALIFIED.
+Direct-employee conversion opportunities at Clayco: score 0, label DISQUALIFIED.
+
+RED-FLAG LANGUAGE — down-score postings containing these phrases
+
+"stakeholder alignment", "cross-functional leadership", "player-coach", "wear many hats", "fast-paced", "influence without authority", "partner with stakeholders to translate goals/strategy", "anticipate and resolve issues before they escalate". Each signals coordination-heavy, ambiguous-ownership work.
+
+GREEN-FLAG LANGUAGE — up-score postings containing these
+
+"own the model", "own the dashboard", "backlog", "month-end close", and named tools: SQL, dbt, Power BI, Anaplan. Each signals concrete IC ownership of systems.
+
+MANUAL VERIFICATION — do not infer
+
+"Zero direct reports" must be confirmed manually for shortlisted roles. Do NOT infer people-management responsibility (or its absence) from the title or posting text alone — titles like "Manager" or "Senior Analyst" are unreliable in either direction. Never adjust the score based on an inference about direct reports.
 
 COMPANY PARAMETERS
 
-Size: Strongly prefer sub-100 employees. Acceptable up to 200. Disqualifying above 300.
+Size: Company size is NOT a disqualifier for IC analytics/data, FP&A, or AEC-IC roles. Established companies with mature data/finance orgs are acceptable and often preferable for IC depth. Target-watchlist companies (Procore, Autodesk, Document Crunch, Billd, Aurigo, Built Technologies, Trimble, Dell, Samsung Austin Semiconductor, Texas Mutual Insurance, Apple Austin, GM IT Innovation Center Austin, Q2, Indeed, Charles Schwab, CoStar, ERCOT) get priority regardless of size. For ERCOT: market/settlement analyst desk roles only — control-room shift roles score low.
 
-Stage: Seed through Series B. Series C acceptable if team is still lean. Pre-seed acceptable if equity is meaningful and traction exists.
+Stage: Any stage. For startups, prefer funded companies with real traction over pre-product.
 
 Location: Georgetown TX. Fully remote required. Open to hybrid if Austin-based. Will NOT relocate under any circumstances. Any role requiring relocation outside Austin metro scores 0 and is excluded.
 
-Industry: Strong preference for AEC-tech, PropTech, ConstructionTech, and AI-native companies building software FOR architects, developers, contractors, or real estate operators — Sam is the buyer persona in these markets, which is a rare and high-value differentiator. Also strong: SaaS, FinTech, and adjacent B2B software. Acceptable: any B2B software with a complex enterprise sales motion. Not acceptable: consumer, crypto, defense, or biotech.
+Industry: Strong preference for AEC-tech, PropTech, ConstructionTech, and AI-native companies building software FOR architects, developers, contractors, or real estate operators — Sam is the buyer persona in these markets, which is a rare and high-value differentiator. Also strong: SaaS, FinTech, and adjacent B2B software. Acceptable: any B2B software with a complex enterprise sales motion. Exploratory (separate CJ-vendor lane, never blended into the main score): criminal-justice technology vendors — Tyler Technologies, Axon, LexisNexis Risk Solutions, Recidiviz. Not acceptable: consumer, crypto, or biotech.
 
-When scoring a company in AEC-tech, PropTech, ConstructionTech, or any vertical where architects, developers, or contractors are the buyer: add 5 bonus points to COMPANY STAGE & SIZE category and note the domain alignment as a named strength. Sam knowing the buyer intimately from 15 years of being the buyer is a significant GTM advantage that most candidates cannot replicate.
+When scoring a company in AEC-tech, PropTech, ConstructionTech, or any vertical where architects, developers, or contractors are the buyer: add 5 bonus points to COMPANY STAGE & SIZE category and note the domain alignment as a named strength. Fifteen years on the buyer side of these products is domain fluency most analyst candidates cannot replicate.
 
 COMPENSATION
 
@@ -111,7 +133,7 @@ When a role mentions performance management systems, HRIS implementation or conf
 
 SCORING INSTRUCTION
 
-Use the following rubric. A genuine fit scores 85-100. A mediocre fit scores 55-75. A poor fit scores below 45. If a role scores above 85 but has a single hard disqualifier (pure sales, relocation required, 500+ person company), output score 0 and label it DISQUALIFIED with the specific reason.
+Use the following rubric. A genuine fit scores 85-100. A mediocre fit scores 55-75. A poor fit scores below 45. If a role scores above 85 but has a single hard disqualifier (pure sales, relocation required, Clayton Korte under any title, Clayco direct-employee conversion, AEC role at an AE firm or consultancy), output score 0 and label it DISQUALIFIED with the specific reason.
 
 STEP 1 — LOCATION GATE (evaluate before anything else):
 Is this role on-site or hybrid AND located outside the Austin, TX metro area AND does it not explicitly state remote work is available?
@@ -119,9 +141,9 @@ If YES to all three: output {"score": 0, "label": "Excluded - relocation require
 
 STEP 2 — Score using this rubric (only if role passed Step 1):
 
-ROLE TYPE FIT (30 pts): 25-30 = GTM Ops, RevOps, BizOps, AI Implementation with build ownership, AI vibe coding, Founding PM. 15-24 = Product Ops, Chief of Staff, ops-heavy with some build. 5-14 = Mixed with sales component or heavy client mgmt. 0-4 = AE, BD, SWE, pure PM, people manager without build.
+ROLE TYPE FIT (30 pts): 25-30 = Lane 1 Analytics/Data IC roles (Analytics Engineer, BI Developer/Engineer, Senior Data Analyst, Business Systems Analyst). 20-27 = Lane 2 FP&A IC roles (Senior Financial/FP&A/Corporate Finance Analyst). 15-22 = Lane 3 AEC-side IC at GC/owner/developer only (VDC, BIM, Estimator, Preconstruction) — score 0-4 if at an AE firm or consultancy. 5-14 = adjacent IC analytics/finance with coordination components. 0-4 = deprioritized categories (GTM, AI Strategy/Implementation Consultant, Founding PM, Solutions Engineer, Customer Success, Lead/Head/Enablement titles), AE, BD, SWE, people manager.
 
-COMPANY STAGE & SIZE (20 pts): 17-20 = Seed/Series A, sub-50 people, strong technical founder. 12-16 = Series B, 50-100 people, lean team. 6-11 = Series B/C, 100-200 people. 0-5 = 200+ people, enterprise, or pre-product with no traction.
+COMPANY STAGE & SIZE (20 pts): 17-20 = target-watchlist company, or any company with a mature data/finance/VDC org where the role is clearly IC. 12-16 = established company, credible team, role scope clear. 6-11 = early-stage or unclear org maturity. 0-5 = pre-product with no traction, AE firm, or consultancy.
 
 REMOTE / LOCATION (15 pts): 15 = Fully remote, no travel requirement. 10-14 = Remote-first with optional Austin travel. 5-9 = Hybrid Austin-based. 0-4 = Any relocation requirement or in-office mandate outside Austin.
 

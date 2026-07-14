@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { LANE_LABELS, SHORTLIST_SCORE_THRESHOLD, MANUAL_CHECKLIST, type Lane } from '@/lib/targeting'
 
 interface Job {
   id: number
@@ -15,6 +16,7 @@ interface Job {
   date_found: string
   status: string
   description: string
+  lane: Lane | null
 }
 
 interface CuratedLead {
@@ -33,6 +35,74 @@ interface CuratedLead {
   description: string | null
   location_unverified: boolean | null
   requires_manual_review: boolean | null
+  lane: Lane | null
+}
+
+// Lane badge colors — active lanes are amber-family; the exploratory CJ vendor
+// lane is visually distinct (violet) because it is surfaced separately.
+const LANE_BADGE_STYLES: Record<Lane, { bg: string; border: string; color: string }> = {
+  'analytics-data': { bg: 'rgba(56,189,248,0.1)',  border: 'rgba(56,189,248,0.3)',  color: '#38bdf8' },
+  'fpa':            { bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.3)',  color: '#4ade80' },
+  'aec-ic':         { bg: 'rgba(200,132,58,0.1)',  border: 'rgba(200,132,58,0.3)',  color: '#C8843A' },
+  'cj-vendor':      { bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.3)', color: '#a78bfa' },
+}
+
+function LaneBadge({ lane }: { lane: Lane | null }) {
+  if (!lane || !LANE_BADGE_STYLES[lane]) return null
+  const s = LANE_BADGE_STYLES[lane]
+  return (
+    <span style={{
+      fontSize: '10px',
+      fontFamily: 'IBM Plex Mono, monospace',
+      background: s.bg,
+      border: `1px solid ${s.border}`,
+      color: s.color,
+      borderRadius: '4px',
+      padding: '2px 8px',
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+    }}>
+      {LANE_LABELS[lane]}
+    </span>
+  )
+}
+
+// Manual verification checklist — shown on shortlisted opportunities only.
+// Deliberately a human checklist item, never inferred from title/posting text.
+function ManualChecklist({ score }: { score: number | null }) {
+  if (score == null || score < SHORTLIST_SCORE_THRESHOLD) return null
+  return (
+    <div style={{
+      marginTop: '10px',
+      padding: '8px 12px',
+      background: 'rgba(250,204,21,0.05)',
+      border: '1px solid rgba(250,204,21,0.15)',
+      borderRadius: '6px',
+    }}>
+      <div style={{
+        fontSize: '9px',
+        fontFamily: 'IBM Plex Mono, monospace',
+        color: '#4A4846',
+        letterSpacing: '0.08em',
+        marginBottom: '4px',
+      }}>
+        MANUAL VERIFICATION — SHORTLIST
+      </div>
+      {MANUAL_CHECKLIST.map(item => (
+        <label key={item} style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '12px',
+          color: '#facc15',
+          cursor: 'pointer',
+        }}>
+          <input type="checkbox" style={{ accentColor: '#facc15' }} />
+          {item}
+        </label>
+      ))}
+    </div>
+  )
 }
 
 export default function JobsPage() {
@@ -289,8 +359,322 @@ export default function JobsPage() {
   const passedJobs = jobs.filter(j => j.status === 'passed')
 
   const MIN_SCORE = 50
-  const visibleCuratedLeads = curatedLeads.filter(l => l.fit_score != null && l.fit_score >= MIN_SCORE)
-  const visibleJobs = [...newJobs, ...appliedJobs, ...passedJobs].filter(j => j.fit_score >= MIN_SCORE)
+  // CJ vendor lane is exploratory — surfaced in its own section, never blended
+  // into the primary Analytics/Data > FP&A > AEC-IC lists.
+  const scoredCuratedLeads = curatedLeads.filter(l => l.fit_score != null && l.fit_score >= MIN_SCORE)
+  const visibleCuratedLeads = scoredCuratedLeads.filter(l => l.lane !== 'cj-vendor')
+  const cjVendorLeads = scoredCuratedLeads.filter(l => l.lane === 'cj-vendor')
+  const visibleJobs = [...newJobs, ...appliedJobs, ...passedJobs].filter(j => j.fit_score >= MIN_SCORE && j.lane !== 'cj-vendor')
+  const cjVendorJobs = [...newJobs, ...appliedJobs, ...passedJobs].filter(j => j.fit_score >= MIN_SCORE && j.lane === 'cj-vendor')
+
+  const renderCuratedLead = (lead: CuratedLead) => (
+        <div key={lead.external_id} style={{
+          background: '#1A1A1A',
+          border: '1px solid rgba(240,237,232,0.08)',
+          borderRadius: '10px',
+          padding: '18px 22px',
+          marginBottom: '10px',
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: '16px',
+            marginBottom: '8px',
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontSize: '15px',
+                fontWeight: '500',
+                color: '#F0EDE8',
+                marginBottom: '3px',
+              }}>
+                {lead.title}
+              </div>
+              <div style={{ fontSize: '13px', color: '#8A8784' }}>
+                {lead.company}
+                {lead.location ? ` · ${lead.location}` : ''}
+              </div>
+            </div>
+            {lead.fit_score != null && (
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{
+                  fontSize: '22px',
+                  fontWeight: '600',
+                  color: lead.fit_score >= 85 ? '#4ade80' : lead.fit_score >= 65 ? '#C8843A' : '#8A8784',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                  lineHeight: 1,
+                }}>
+                  {lead.fit_score}
+                </div>
+                <div style={{
+                  fontSize: '9px',
+                  color: '#4A4846',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                  marginTop: '2px',
+                }}>
+                  FIT SCORE
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Badges */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <LaneBadge lane={lead.lane} />
+            {(lead.location?.toLowerCase().includes('remote') || lead.source === 'target-ashby' && !lead.location_unverified) && (
+              <span style={{
+                fontSize: '10px',
+                fontFamily: 'IBM Plex Mono, monospace',
+                background: 'rgba(74,222,128,0.1)',
+                border: '1px solid rgba(74,222,128,0.25)',
+                color: '#4ade80',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                letterSpacing: '0.06em',
+              }}>
+                REMOTE
+              </span>
+            )}
+            {lead.location_unverified && (
+              <span style={{
+                fontSize: '10px',
+                fontFamily: 'IBM Plex Mono, monospace',
+                background: 'rgba(250,204,21,0.1)',
+                border: '1px solid rgba(250,204,21,0.25)',
+                color: '#facc15',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                letterSpacing: '0.06em',
+              }}>
+                VERIFY LOCATION
+              </span>
+            )}
+            {lead.requires_manual_review && (
+              <span style={{
+                fontSize: '10px',
+                fontFamily: 'IBM Plex Mono, monospace',
+                background: 'rgba(138,135,132,0.1)',
+                border: '1px solid rgba(138,135,132,0.2)',
+                color: '#8A8784',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                letterSpacing: '0.06em',
+              }}>
+                CHECK MANUALLY
+              </span>
+            )}
+          </div>
+
+          {lead.fit_summary && !lead.requires_manual_review && (
+            <div style={{
+              fontSize: '12px',
+              color: '#8A8784',
+              lineHeight: '1.5',
+              marginBottom: '10px',
+            }}>
+              {lead.fit_summary}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <a
+              href={lead.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                background: '#C8843A',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#0F0F0F',
+                fontSize: '12px',
+                fontWeight: '500',
+                padding: '7px 14px',
+                textDecoration: 'none',
+                fontFamily: 'IBM Plex Mono, monospace',
+              }}
+            >
+              View posting ↗
+            </a>
+            {lead.description && !lead.requires_manual_review && (
+              <button
+                onClick={() => {
+                  sessionStorage.setItem('career_prefill_job', lead.description ?? '')
+                  sessionStorage.setItem('career_prefill_title', `${lead.title} at ${lead.company}`)
+                  router.push('/')
+                }}
+                style={{
+                  background: 'none',
+                  border: '1px solid rgba(240,237,232,0.1)',
+                  borderRadius: '6px',
+                  color: '#8A8784',
+                  fontSize: '12px',
+                  padding: '7px 14px',
+                  cursor: 'pointer',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                }}
+              >
+                Analyze →
+              </button>
+            )}
+          </div>
+          <ManualChecklist score={lead.fit_score} />
+        </div>
+  )
+
+  const renderGeneralJob = (job: Job) => (
+      <div key={job.id} style={cardStyle(job.status)}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '12px',
+          gap: '16px',
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: '500',
+              color: '#F0EDE8',
+              marginBottom: '4px',
+            }}>
+              {job.title}
+            </div>
+            <div style={{
+              fontSize: '13px',
+              color: '#8A8784',
+            }}>
+              {job.company}
+              {job.location ? ` · ${job.location}` : ''}
+              {job.salary_display
+                ? ` · ${job.salary_display}`
+                : ' · Salary not listed'}
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+              <LaneBadge lane={job.lane} />
+            </div>
+          </div>
+          <div style={{
+            textAlign: 'right',
+            flexShrink: 0,
+          }}>
+            <div style={{
+              fontSize: '24px',
+              fontWeight: '600',
+              color: scoreColor(job.fit_score),
+              fontFamily: 'IBM Plex Mono, monospace',
+              lineHeight: 1,
+            }}>
+              {job.fit_score}
+            </div>
+            <div style={{
+              fontSize: '10px',
+              color: '#4A4846',
+              fontFamily: 'IBM Plex Mono, monospace',
+              marginTop: '2px',
+            }}>
+              FIT SCORE
+            </div>
+            <ManualChecklist score={job.fit_score} />
+          </div>
+        </div>
+
+        <div style={{
+          fontSize: '13px',
+          color: '#8A8784',
+          lineHeight: '1.6',
+          marginBottom: '16px',
+        }}>
+          {job.fit_summary}
+        </div>
+
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}>
+          <button
+            onClick={() => analyze(job)}
+            style={{
+              background: '#C8843A',
+              border: 'none',
+              borderRadius: '6px',
+              color: '#0F0F0F',
+              fontSize: '12px',
+              fontWeight: '500',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              fontFamily: 'IBM Plex Mono, monospace',
+            }}
+          >
+            Analyze →
+          </button>
+          <a
+            href={job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              background: 'none',
+              border: '1px solid rgba(240,237,232,0.1)',
+              borderRadius: '6px',
+              color: '#8A8784',
+              fontSize: '12px',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              textDecoration: 'none',
+              fontFamily: 'IBM Plex Mono, monospace',
+            }}
+          >
+            View posting ↗
+          </a>
+          {job.status === 'new' && (
+            <>
+              <button
+                onClick={() => updateStatus(job.id, 'applied')}
+                style={{
+                  background: 'none',
+                  border: '1px solid rgba(74,222,128,0.2)',
+                  borderRadius: '6px',
+                  color: '#4ade80',
+                  fontSize: '12px',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                }}
+              >
+                Mark applied
+              </button>
+              <button
+                onClick={() => updateStatus(job.id, 'passed')}
+                style={{
+                  background: 'none',
+                  border: '1px solid rgba(240,237,232,0.07)',
+                  borderRadius: '6px',
+                  color: '#4A4846',
+                  fontSize: '12px',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                }}
+              >
+                Pass
+              </button>
+            </>
+          )}
+          {job.status === 'applied' && (
+            <span style={{
+              fontSize: '11px',
+              color: '#4ade80',
+              fontFamily: 'IBM Plex Mono, monospace',
+              letterSpacing: '0.08em',
+            }}>
+              APPLIED
+            </span>
+          )}
+        </div>
+      </div>
+  )
 
   return (
     <div style={pageStyle}>
@@ -377,7 +761,7 @@ export default function JobsPage() {
                 letterSpacing: '0.1em',
                 marginBottom: '2px',
               }}>
-                CURATED COMPANY TARGETS
+                CURATED COMPANY TARGETS · ANALYTICS/DATA &gt; FP&amp;A &gt; AEC-IC
               </div>
               <div style={{ fontSize: '12px', color: '#4A4846' }}>
                 {visibleCuratedLeads.length} lead{visibleCuratedLeads.length !== 1 ? 's' : ''} scored ≥50 · {curatedLeads.filter(l => l.requires_manual_review).length} require manual review
@@ -441,159 +825,33 @@ export default function JobsPage() {
             </div>
           )}
 
-          {visibleCuratedLeads.map(lead => (
-            <div key={lead.external_id} style={{
-              background: '#1A1A1A',
-              border: '1px solid rgba(240,237,232,0.08)',
-              borderRadius: '10px',
-              padding: '18px 22px',
-              marginBottom: '10px',
-            }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: '16px',
-                marginBottom: '8px',
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: '15px',
-                    fontWeight: '500',
-                    color: '#F0EDE8',
-                    marginBottom: '3px',
-                  }}>
-                    {lead.title}
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#8A8784' }}>
-                    {lead.company}
-                    {lead.location ? ` · ${lead.location}` : ''}
-                  </div>
-                </div>
-                {lead.fit_score != null && (
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{
-                      fontSize: '22px',
-                      fontWeight: '600',
-                      color: lead.fit_score >= 85 ? '#4ade80' : lead.fit_score >= 65 ? '#C8843A' : '#8A8784',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                      lineHeight: 1,
-                    }}>
-                      {lead.fit_score}
-                    </div>
-                    <div style={{
-                      fontSize: '9px',
-                      color: '#4A4846',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                      marginTop: '2px',
-                    }}>
-                      FIT SCORE
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Badges */}
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                {(lead.location?.toLowerCase().includes('remote') || lead.source === 'target-ashby' && !lead.location_unverified) && (
-                  <span style={{
-                    fontSize: '10px',
-                    fontFamily: 'IBM Plex Mono, monospace',
-                    background: 'rgba(74,222,128,0.1)',
-                    border: '1px solid rgba(74,222,128,0.25)',
-                    color: '#4ade80',
-                    borderRadius: '4px',
-                    padding: '2px 8px',
-                    letterSpacing: '0.06em',
-                  }}>
-                    REMOTE
-                  </span>
-                )}
-                {lead.location_unverified && (
-                  <span style={{
-                    fontSize: '10px',
-                    fontFamily: 'IBM Plex Mono, monospace',
-                    background: 'rgba(250,204,21,0.1)',
-                    border: '1px solid rgba(250,204,21,0.25)',
-                    color: '#facc15',
-                    borderRadius: '4px',
-                    padding: '2px 8px',
-                    letterSpacing: '0.06em',
-                  }}>
-                    VERIFY LOCATION
-                  </span>
-                )}
-                {lead.requires_manual_review && (
-                  <span style={{
-                    fontSize: '10px',
-                    fontFamily: 'IBM Plex Mono, monospace',
-                    background: 'rgba(138,135,132,0.1)',
-                    border: '1px solid rgba(138,135,132,0.2)',
-                    color: '#8A8784',
-                    borderRadius: '4px',
-                    padding: '2px 8px',
-                    letterSpacing: '0.06em',
-                  }}>
-                    CHECK MANUALLY
-                  </span>
-                )}
-              </div>
-
-              {lead.fit_summary && !lead.requires_manual_review && (
-                <div style={{
-                  fontSize: '12px',
-                  color: '#8A8784',
-                  lineHeight: '1.5',
-                  marginBottom: '10px',
-                }}>
-                  {lead.fit_summary}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <a
-                  href={lead.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    background: '#C8843A',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: '#0F0F0F',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    padding: '7px 14px',
-                    textDecoration: 'none',
-                    fontFamily: 'IBM Plex Mono, monospace',
-                  }}
-                >
-                  View posting ↗
-                </a>
-                {lead.description && !lead.requires_manual_review && (
-                  <button
-                    onClick={() => {
-                      sessionStorage.setItem('career_prefill_job', lead.description ?? '')
-                      sessionStorage.setItem('career_prefill_title', `${lead.title} at ${lead.company}`)
-                      router.push('/')
-                    }}
-                    style={{
-                      background: 'none',
-                      border: '1px solid rgba(240,237,232,0.1)',
-                      borderRadius: '6px',
-                      color: '#8A8784',
-                      fontSize: '12px',
-                      padding: '7px 14px',
-                      cursor: 'pointer',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                    }}
-                  >
-                    Analyze →
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+          {visibleCuratedLeads.map(renderCuratedLead)}
         </div>
+
+        {/* ── CJ Vendor lane (exploratory — separate from primary lanes) ── */}
+        {(cjVendorLeads.length > 0 || cjVendorJobs.length > 0) && (
+          <div style={{
+            borderBottom: '1px solid rgba(167,139,250,0.15)',
+            paddingBottom: '24px',
+            marginBottom: '32px',
+          }}>
+            <div style={{
+              fontSize: '11px',
+              fontFamily: 'IBM Plex Mono, monospace',
+              color: '#a78bfa',
+              letterSpacing: '0.1em',
+              marginBottom: '2px',
+            }}>
+              CJ VENDOR LANE — EXPLORATORY
+            </div>
+            <div style={{ fontSize: '12px', color: '#4A4846', marginBottom: '16px' }}>
+              Criminal-justice vendors (Tyler Technologies, Axon, LexisNexis Risk, Recidiviz) · tracked separately, not blended into primary lanes
+            </div>
+            {cjVendorLeads.map(renderCuratedLead)}
+            {cjVendorJobs.map(job => renderGeneralJob(job))}
+          </div>
+        )}
+
 
         {/* ── General job leads (all sources) ────────────────────────── */}
         <div style={{
@@ -617,155 +875,7 @@ export default function JobsPage() {
           </div>
         )}
 
-        {visibleJobs.map(job => (
-          <div key={job.id} style={cardStyle(job.status)}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              marginBottom: '12px',
-              gap: '16px',
-            }}>
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  fontSize: '16px',
-                  fontWeight: '500',
-                  color: '#F0EDE8',
-                  marginBottom: '4px',
-                }}>
-                  {job.title}
-                </div>
-                <div style={{
-                  fontSize: '13px',
-                  color: '#8A8784',
-                }}>
-                  {job.company}
-                  {job.location ? ` · ${job.location}` : ''}
-                  {job.salary_display
-                    ? ` · ${job.salary_display}`
-                    : ' · Salary not listed'}
-                </div>
-              </div>
-              <div style={{
-                textAlign: 'right',
-                flexShrink: 0,
-              }}>
-                <div style={{
-                  fontSize: '24px',
-                  fontWeight: '600',
-                  color: scoreColor(job.fit_score),
-                  fontFamily: 'IBM Plex Mono, monospace',
-                  lineHeight: 1,
-                }}>
-                  {job.fit_score}
-                </div>
-                <div style={{
-                  fontSize: '10px',
-                  color: '#4A4846',
-                  fontFamily: 'IBM Plex Mono, monospace',
-                  marginTop: '2px',
-                }}>
-                  FIT SCORE
-                </div>
-              </div>
-            </div>
-
-            <div style={{
-              fontSize: '13px',
-              color: '#8A8784',
-              lineHeight: '1.6',
-              marginBottom: '16px',
-            }}>
-              {job.fit_summary}
-            </div>
-
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}>
-              <button
-                onClick={() => analyze(job)}
-                style={{
-                  background: '#C8843A',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: '#0F0F0F',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  fontFamily: 'IBM Plex Mono, monospace',
-                }}
-              >
-                Analyze →
-              </button>
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  background: 'none',
-                  border: '1px solid rgba(240,237,232,0.1)',
-                  borderRadius: '6px',
-                  color: '#8A8784',
-                  fontSize: '12px',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  textDecoration: 'none',
-                  fontFamily: 'IBM Plex Mono, monospace',
-                }}
-              >
-                View posting ↗
-              </a>
-              {job.status === 'new' && (
-                <>
-                  <button
-                    onClick={() => updateStatus(job.id, 'applied')}
-                    style={{
-                      background: 'none',
-                      border: '1px solid rgba(74,222,128,0.2)',
-                      borderRadius: '6px',
-                      color: '#4ade80',
-                      fontSize: '12px',
-                      padding: '8px 16px',
-                      cursor: 'pointer',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                    }}
-                  >
-                    Mark applied
-                  </button>
-                  <button
-                    onClick={() => updateStatus(job.id, 'passed')}
-                    style={{
-                      background: 'none',
-                      border: '1px solid rgba(240,237,232,0.07)',
-                      borderRadius: '6px',
-                      color: '#4A4846',
-                      fontSize: '12px',
-                      padding: '8px 16px',
-                      cursor: 'pointer',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                    }}
-                  >
-                    Pass
-                  </button>
-                </>
-              )}
-              {job.status === 'applied' && (
-                <span style={{
-                  fontSize: '11px',
-                  color: '#4ade80',
-                  fontFamily: 'IBM Plex Mono, monospace',
-                  letterSpacing: '0.08em',
-                }}>
-                  APPLIED
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
+        {visibleJobs.map(job => renderGeneralJob(job))}
       </div>
     </div>
   )
