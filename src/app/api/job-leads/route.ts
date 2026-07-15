@@ -4,6 +4,7 @@ import { getDb, initDb } from '@/lib/db'
 import { DNA_PROMPT } from '@/lib/dna'
 import { scrapeAllTargets, type JobLead } from '@/lib/jobLeadsScraper'
 import { isExcludedOpportunity, applyKeywordAdjustments, watchlistAndLaneBonus, laneForOpportunity } from '@/lib/targeting'
+import { locationPrecheck, LOCATION_GATE_PROMPT_BLOCK } from '@/lib/locationGate'
 
 export const maxDuration = 300
 
@@ -11,11 +12,7 @@ export const maxDuration = 300
 
 const CURATED_SCORING_PROMPT = `You are scoring a job posting for Sam Manning.
 
-STEP 1 — LOCATION GATE:
-Is this role on-site AND located outside the Austin, TX metro area AND does it not
-explicitly state remote work is available?
-If YES to all three: output {"score": 0, "label": "Excluded - relocation required",
-"summary": "Role requires relocation outside Austin TX. Hard filter applied."} and stop.
+${LOCATION_GATE_PROMPT_BLOCK}
 
 STEP 2 — Hard exclusions: Clayton Korte (any title) or a Clayco direct-employee
 conversion: output {"score": 0, "label": "Disqualified", "summary": "Excluded
@@ -42,6 +39,8 @@ async function scoreJob(
   // Hard exclusions — never surface, never score.
   if (isExcludedOpportunity(company, title, description)) return null
 
+  const precheck = locationPrecheck(location, description)
+
   try {
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -54,6 +53,7 @@ async function scoreJob(
 JOB TITLE: ${title}
 COMPANY: ${company}
 LOCATION: ${location}
+LOCATION PRE-CHECK: ${precheck}
 DESCRIPTION: ${description.slice(0, 2_000)}`,
       }],
     })
