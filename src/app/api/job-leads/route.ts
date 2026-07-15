@@ -18,13 +18,8 @@ STEP 2 — Hard exclusions: Clayton Korte (any title) or a Clayco direct-employe
 conversion: output {"score": 0, "label": "Disqualified", "summary": "Excluded
 company. Hard filter applied."} and stop.
 
-STEP 3 — Score 0-100 using this rubric:
-- Role type fit (30 pts): Lane 1 Analytics/Data IC (Analytics Engineer, BI Developer/Engineer, Senior Data Analyst, Business Systems Analyst) = 25-30. Lane 2 FP&A IC (Senior Financial/FP&A/Corporate Finance Analyst) = 20-27. Lane 3 AEC-side IC at GC/owner/developer only (VDC, BIM, Estimator, Preconstruction) = 15-22, but 0-4 at AE firms or consultancies. Adjacent IC analytics/finance = 5-14. Deprioritized (GTM, AI Strategy/Implementation Consultant, Founding PM, Solutions Engineer, Customer Success, Lead/Head/Enablement titles), AE/BD/SWE, people manager = 0-4.
-- Company stage & size (20 pts): Target-watchlist company or mature data/finance/VDC org with clear IC role = 17-20. Established credible company = 12-16. Early-stage or unclear = 6-11. Pre-product, AE firm, or consultancy = 0-5.
-- Remote/location (15 pts): Fully remote = 15. Austin hybrid within 35 miles of Georgetown TX = 12. Austin unclear policy = 6. Relocation or 5-day in-office = 0.
-- Compensation signal (15 pts): $180K+ stated = 13-15. $150-180K = 9-12. $120-150K with equity = 4-8. Below $120K = 0-3.
-- Build ownership (10 pts): Owns building from zero = 9-10. Significant build component = 6-8. Some tooling = 3-5. Advisory/management only = 0-2.
-- Team caliber (5 pts): YC/tier-1/technical founders = 5. Experienced with traction = 3-4. Unknown founders = 1-2. Red flags = 0.
+STEP 3 — Only if the role passed Steps 1-2, score it 0-100 using the rubric
+defined in your system instructions.
 
 Return ONLY a JSON object, no markdown, no preamble:
 {"score": <integer 0-100>, "label": "<Poor match|Partial match|Good match|Strong match|Exceptional match|Excluded - relocation required>", "summary": "<one sentence>"}`

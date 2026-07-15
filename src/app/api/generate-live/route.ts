@@ -49,51 +49,8 @@ ${LOCATION_GATE_PROMPT_BLOCK}
 
 OUTPUT ADAPTATION for this task: where the gate above says to output {"score": 0, "label": ..., "summary": ...} and stop, instead set roleFit.score to 0, roleFit.scoreLabel to "Excluded - relocation required", and roleFit.summary to "Role requires relocation outside Austin TX commute area. Hard filter applied." Still generate the full JSON structure but reflect the disqualification throughout. Do not alter the gate rules themselves.
 
-STEP 2 — Score 0-100 using this rubric (only if role passed Step 1).
-Add up points across all 6 categories:
-
-ROLE TYPE FIT (30 pts max):
-25-30 = GTM Ops, RevOps, BizOps, AI Implementation with build ownership,
-        AI vibe coding/prompt engineering, Founding PM
-15-24 = Product Ops, Chief of Staff, ops-heavy with some build component
-5-14  = Mixed role with sales component or heavy client management
-0-4   = AE, BD, SWE, pure PM, people manager without build
-
-COMPANY STAGE & SIZE (20 pts max):
-17-20 = Seed/Series A, sub-50 people, strong technical founder
-12-16 = Series B, 50-100 people, lean team
-6-11  = Series B/C, 100-200 people
-0-5   = 200+ people, enterprise, or pre-product with no traction
-
-REMOTE / LOCATION (15 pts max):
-15    = Fully remote, no office requirement
-12    = Austin-based or hybrid within 35 miles of Georgetown TX (78626) — Austin,
-        Round Rock, Cedar Park, Leander, Georgetown, Pflugerville, Hutto, Taylor,
-        Buda, Kyle, San Marcos. Role must be hybrid or flexible, not 5-day in-office.
-6     = Austin-area role with unclear or unstated remote/hybrid policy — flag for
-        manual review, do not score 0 for ambiguity
-0     = Requires relocation outside Austin metro, or mandates 5-day in-office
-
-COMPENSATION SIGNAL (15 pts max):
-13-15 = $180K+ base stated or strongly implied by stage and seniority
-9-12  = $150-180K range or strong equity offset
-4-8   = $120-150K with compelling equity
-0-3   = Below $120K or unclear with no equity signal
-
-BUILD OWNERSHIP (10 pts max):
-9-10  = Role explicitly owns building systems or infrastructure from zero
-6-8   = Significant build component alongside ops work
-3-5   = Some tooling/process work but primarily executional
-0-2   = Advisory, oversight, or pure management role
-
-TEAM CALIBER SIGNALS (5 pts max):
-5     = Technical founders, YC/tier-1 funded, verifiable high-hiring-bar signals
-3-4   = Experienced founders, funded with traction
-1-2   = Unknown founders, limited signal
-0     = Red flags (high churn signals, chaotic JD)
-
-Sum all categories for the final score. A genuine fit scores 85-100. A mediocre
-fit scores 55-75. A poor fit scores below 45.
+STEP 2 — Only if the role passed Step 1, score it 0-100 using the rubric defined
+in your system instructions.
 
 ENVIRONMENT FIT INSTRUCTIONS — apply these when populating roleFit.strengths and roleFit.gaps:
 - Factor in environment fit alongside skills match
