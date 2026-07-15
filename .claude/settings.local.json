@@ -8,7 +8,32 @@
       "Bash(git push:*)",
       "Bash(git reset:*)",
       "Bash(npx vercel:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git checkout:*)",
+      "Bash(perl -pi -e \"s/\\\\Qif \\(!scored || scored.score < 60\\) { console.log\\(''SCORE DEBUG:'', title, scored?.score, scored?.label\\); continue }\\\\E/if \\(!scored || scored.score < 60\\) continue/g; s/\\\\Qif \\(!scored || scored.score < 60\\) { console.log\\(''SCORE DEBUG:'', job.title, scored?.score, scored?.label\\); continue }\\\\E/if \\(!scored || scored.score < 60\\) continue/g; s/\\\\Qif \\(!scored || scored.score < 60\\) { console.log\\(''SCORE DEBUG:'', job.text, scored?.score, scored?.label\\); continue }\\\\E/if \\(!scored || scored.score < 60\\) continue/g; s/\\\\Qif \\(!scored || scored.score < 70\\) { console.log\\(''SCORE DEBUG:'', title, scored?.score, scored?.label\\); continue }\\\\E/if \\(!scored || scored.score < 70\\) continue/g\" src/app/api/jobs/cron/route.ts)",
+      "Bash(git pull:*)",
+      "Bash(ls -a .env*)",
+      "Bash(grep -l \"LIVE_MODE_TOKEN\\\\|ANTHROPIC_API_KEY\" .env*)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"next start -p 3111\")",
+      "Bash(LIVE_MODE_TOKEN=localtest123 npm run start -- -p 3111)",
+      "Bash(Grep=\"\")",
+      "Bash(ls .env*)",
+      "Bash(fuser -k 3111/tcp)",
+      "Bash(fuser 3111/tcp)",
+      "Bash(python3 -c \":*)",
+      "Bash(docker ps:*)",
+      "Bash(ls /tmp/*.txt /tmp/*posting*)",
+      "Bash(grep -l ANTHROPIC_API_KEY /home/overlord/career-engine-demo/.env*)",
+      "Bash(LIVE_MODE_TOKEN=smoketest123 npx next dev -p 3111)",
+      "Bash(set -a)",
+      "Bash(source .env.local)",
+      "Bash(set +a)",
+      "Bash(/home/overlord/career-engine-demo/node_modules/.bin/tsx cron-score.ts)",
+      "Bash(./node_modules/.bin/tsx /tmp/rubric-smoke/cron-score.ts)",
+      "Bash(cp /tmp/rubric-smoke/posting.json /home/overlord/career-engine-demo/.smoke-posting.json)",
+      "Bash(sed -e \"s#''../../home/overlord/career-engine-demo/src/lib/dna''#''./src/lib/dna''#\" -e \"s#''../../home/overlord/career-engine-demo/src/lib/locationGate''#''./src/lib/locationGate''#\" -e \"s#''./posting.json''#''./.smoke-posting.json''#\" /tmp/rubric-smoke/cron-score.ts)",
+      "Bash(./node_modules/.bin/tsx .smoke-cron-score.ts)"
     ]
   }
 }
