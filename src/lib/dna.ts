@@ -135,11 +135,9 @@ SCORING INSTRUCTION
 
 Use the following rubric. A genuine fit scores 85-100. A mediocre fit scores 55-75. A poor fit scores below 45. If a role scores above 85 but has a single hard disqualifier (pure sales, relocation required, Clayton Korte under any title, Clayco direct-employee conversion, AEC role at an AE firm or consultancy), output score 0 and label it DISQUALIFIED with the specific reason.
 
-STEP 1 — LOCATION GATE (evaluate before anything else):
-Is this role on-site or hybrid AND located outside the Austin, TX metro area AND does it not explicitly state remote work is available?
-If YES to all three: output {"score": 0, "label": "Excluded - relocation required", "summary": "Role requires relocation outside Austin TX. Hard filter applied."} and stop.
+The LOCATION GATE is defined authoritatively in the task instructions (user message), which include a deterministic LOCATION PRE-CHECK line. Apply that gate first; do not apply any other location-gate logic.
 
-STEP 2 — Score using this rubric (only if role passed Step 1):
+Score using this rubric (only if the role passed the location gate in the task instructions):
 
 ROLE TYPE FIT (30 pts): 25-30 = Lane 1 Analytics/Data IC roles (Analytics Engineer, BI Developer/Engineer, Senior Data Analyst, Business Systems Analyst). 20-27 = Lane 2 FP&A IC roles (Senior Financial/FP&A/Corporate Finance Analyst). 15-22 = Lane 3 AEC-side IC at GC/owner/developer only (VDC, BIM, Estimator, Preconstruction) — score 0-4 if at an AE firm or consultancy. 5-14 = adjacent IC analytics/finance with coordination components. 0-4 = deprioritized categories (GTM, AI Strategy/Implementation Consultant, Founding PM, Solutions Engineer, Customer Success, Lead/Head/Enablement titles), AE, BD, SWE, people manager.
 

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import Anthropic from '@anthropic-ai/sdk'
 import { DNA_PROMPT } from '@/lib/dna'
+import { locationPrecheck, LOCATION_GATE_PROMPT_BLOCK } from '@/lib/locationGate'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -23,6 +24,15 @@ export async function POST(request: Request) {
     return Response.json({ error: 'No job posting provided' }, { status: 400 })
   }
 
+  // generate-live receives one raw pasted blob, not structured location fields.
+  // Pass an empty location so the blob is evaluated as description text only:
+  // this preserves the precheck's precedence rule (explicit on-site language
+  // beats an incidental "remote" mention). Passing the blob as the location
+  // argument would let "no remote" match the remote-location regex first.
+  // Worst case is UNCLEAR, which the gate handles safely (manual review, not
+  // exclusion).
+  const precheck = locationPrecheck('', jobPosting)
+
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -35,15 +45,9 @@ export async function POST(request: Request) {
 
 SCORING INSTRUCTIONS — apply these before generating any output:
 
-STEP 1 — LOCATION GATE:
-Is this role on-site or hybrid AND located outside the Austin, TX metro area (outside
-the 35-mile commute radius from Georgetown, TX 78626) AND does it not explicitly state
-remote work is available?
-If YES to all three: set roleFit.score to 0 and roleFit.scoreLabel to
-"Excluded - relocation required" and roleFit.summary to "Role requires relocation
-outside Austin TX. Sam will not relocate. Hard filter applied." Still generate the
-full JSON structure but reflect the disqualification throughout.
-Austin-metro and hybrid roles are NOT excluded — they proceed to Step 2.
+${LOCATION_GATE_PROMPT_BLOCK}
+
+OUTPUT ADAPTATION for this task: where the gate above says to output {"score": 0, "label": ..., "summary": ...} and stop, instead set roleFit.score to 0, roleFit.scoreLabel to "Excluded - relocation required", and roleFit.summary to "Role requires relocation outside Austin TX commute area. Hard filter applied." Still generate the full JSON structure but reflect the disqualification throughout. Do not alter the gate rules themselves.
 
 STEP 2 — Score 0-100 using this rubric (only if role passed Step 1).
 Add up points across all 6 categories:
@@ -140,6 +144,8 @@ OUTPUT REQUIREMENTS:
   2-4 red flags
 - Be specific to Sam's actual background — no generic advice
 - Return only valid JSON. No markdown fences, no preamble, no explanation.
+
+LOCATION PRE-CHECK: ${precheck}
 
 JOB POSTING:
 ${jobPosting}
