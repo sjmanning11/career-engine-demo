@@ -271,7 +271,7 @@ async function scrapeVibeCodeCareers(client: Anthropic, sql: any, results: Resul
 
         const scored = await scoreJobWithClaude(client, title, company, 'Remote', description.slice(0, 2000))
         results.scored++
-        if (!scored || scored.score < 60) continue
+        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
 
         const slug = jobUrl.split('/job/')[1]?.replace(/\//g, '') || jobUrl
         const externalId = 'vcc-' + slug
@@ -363,7 +363,7 @@ async function fetchAshbyJobs(client: Anthropic, sql: any, results: Results) {
         const scored = await scoreJobWithClaude(
           client, job.title, company.name, jobLocation || 'Remote', description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) continue
+        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', job.title, scored?.score, scored?.label); continue }
         results.scored++
 
         await sql`
@@ -447,7 +447,7 @@ async function fetchLeverJobs(client: Anthropic, sql: any, results: Results) {
         const scored = await scoreJobWithClaude(
           client, job.text, company.name, jobLocation, description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) continue
+        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', job.text, scored?.score, scored?.label); continue }
         results.scored++
 
         await sql`
@@ -520,7 +520,7 @@ async function fetchGreenhouseJobs(client: Anthropic, sql: any, results: Results
         const scored = await scoreJobWithClaude(
           client, job.title, company.name, jobLocation, description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) continue
+        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', job.title, scored?.score, scored?.label); continue }
         results.scored++
 
         await sql`
@@ -598,7 +598,7 @@ async function fetchAecTechJobsRSS(client: Anthropic, sql: any, results: Results
       const scored = await scoreJobWithClaude(
         client, jobTitle, company, 'Remote', description.slice(0, 2000)
       )
-      if (!scored || scored.score < 60) continue
+      if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
       results.scored++
 
       await sql`
@@ -785,7 +785,7 @@ async function fetchYCFallback(client: Anthropic, sql: any, results: Results) {
         const scored = await scoreJobWithClaude(
           client, title, company, 'Remote', description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) continue
+        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
         results.scored++
 
         await sql`
@@ -870,7 +870,7 @@ async function fetchYCJobs(client: Anthropic, sql: any, results: Results) {
       const scored = await scoreJobWithClaude(
         client, title, company, 'Remote', description.slice(0, 2000)
       )
-      if (!scored || scored.score < 60) continue
+      if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
       results.scored++
 
       await sql`
@@ -953,7 +953,7 @@ export async function GET(request: NextRequest) {
             description.slice(0, 2000)
           )
           results.scored++
-          if (!scored || scored.score < 70) continue
+          if (!scored || scored.score < 70) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
 
           const salaryMin = job.salary_min ? Math.round(job.salary_min) : null
           const salaryMax = job.salary_max ? Math.round(job.salary_max) : null
