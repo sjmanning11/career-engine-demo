@@ -52,18 +52,7 @@ ${LOCATION_GATE_PROMPT_BLOCK}
 STEP 2 — Only if the role passed Step 1, check hard exclusions:
 Clayton Korte (any title) or a Clayco direct-employee conversion: output {"score": 0, "label": "Disqualified", "summary": "Excluded company. Hard filter applied."} and stop.
 
-STEP 3 — Only if the role passed Steps 1-2, score it 0–100 using this rubric:
-- Role type fit (30 pts max): Lane 1 Analytics/Data IC (Analytics Engineer, BI Developer/Engineer, Senior Data Analyst, Business Systems Analyst) = 25-30. Lane 2 FP&A IC (Senior Financial/FP&A/Corporate Finance Analyst) = 20-27. Lane 3 AEC-side IC at GC/owner/developer only (VDC, BIM, Estimator, Preconstruction) = 15-22, but 0-4 at AE firms or consultancies. Adjacent IC analytics/finance = 5-14. Deprioritized (GTM, AI Strategy/Implementation Consultant, Founding PM, Solutions Engineer, Customer Success, Lead/Head/Enablement titles), AE/BD/SWE, people manager = 0-4.
-- Company stage & size (20 pts max): Target-watchlist company or mature data/finance/VDC org with clear IC role = 17-20. Established credible company = 12-16. Early-stage or unclear = 6-11. Pre-product, AE firm, or consultancy = 0-5.
-- Remote/location (15 pts max):
-    TIER 1 — 15 pts: Fully remote, no office requirement.
-    TIER 2 — 12 pts: Austin-based or hybrid within 35 miles of Georgetown TX (78626). Cities in range: Austin, Round Rock, Cedar Park, Leander, Georgetown, Pflugerville, Hutto, Taylor, Buda, Kyle, San Marcos. Role must be hybrid or flexible — not 5 days/week in office.
-    TIER 3 — 6 pts: Role with unclear or unstated remote/hybrid policy (including any role that reached this step with LOCATION PRE-CHECK: UNCLEAR). Flag summary with "[Manual review: location policy unclear]". Do NOT score 0 for ambiguity — default to 6.
-    TIER 4 — 0 pts: Requires relocation outside the Austin metro, OR mandates 5-day in-office attendance regardless of location.
-- Compensation signal (15 pts max): $180K+ stated = 13-15. $150-180K = 9-12. $120-150K with equity = 4-8. Below $120K = 0-3.
-- Build ownership (10 pts max): Owns building from zero = 9-10. Significant build component = 6-8. Some tooling work = 3-5. Advisory/management only = 0-2.
-- Adoption authority (5 pts max): Authority over implementation = 5. Reasonable cross-functional influence = 3-4. Hands off to others = 1-2. No adoption ownership = 0.
-- Team caliber (5 pts max): YC/tier-1/technical founders = 5. Experienced founders with traction = 3-4. Unknown founders = 1-2. Red flags = 0.`
+STEP 3 — Only if the role passed Steps 1-2, score it 0–100 using the rubric defined in your system instructions.`
 
 async function scoreJobWithClaude(
   client: Anthropic,
