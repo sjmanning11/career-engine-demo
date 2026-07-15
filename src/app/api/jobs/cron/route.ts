@@ -40,14 +40,44 @@ type Results = {
   bySource: Record<string, { fetched: number; saved: number }>
 }
 
+// ── Location pre-check ────────────────────────────────────────────────────────
+// Deterministic relocation signal computed in code, injected into the scoring
+// prompt. This exists because some sources (notably Adzuna) geocode fully
+// remote jobs to a physical city and truncate descriptions, so "location says
+// a non-Austin city and the snippet doesn't mention remote" is NOT a reliable
+// on-site signal. Only explicit language may trigger the relocation exclusion.
+
+type LocationPrecheck =
+  | 'REMOTE_ELIGIBLE'
+  | 'AUSTIN_METRO'
+  | 'EXPLICIT_ONSITE_NON_AUSTIN'
+  | 'UNCLEAR'
+
+const REMOTE_LOCATION_RE = /\b(remote|anywhere|distributed|worldwide|global|telecommute)\b/i
+const AUSTIN_METRO_RE = /\b(austin|georgetown|round rock|cedar park|leander|pflugerville|hutto|taylor|buda|kyle|san marcos)\b/i
+const EXPLICIT_ONSITE_RE = /\b(relocation\s+(?:is\s+)?required|must\s+relocate|willing\s+to\s+relocate|on-?site\s+(?:only|required)|in-?office\s+(?:only|required)|no\s+remote)\b/i
+const REMOTE_DESC_RE = /\b(remote|work[- ]from[- ]home|work[- ]from[- ]anywhere|wfh|telecommute|fully distributed)\b/i
+
+function locationPrecheck(location: string, description: string): LocationPrecheck {
+  // Structured location field is the most reliable signal — check it first.
+  if (REMOTE_LOCATION_RE.test(location)) return 'REMOTE_ELIGIBLE'
+  if (AUSTIN_METRO_RE.test(location)) return 'AUSTIN_METRO'
+  // Explicit on-site language beats an incidental "remote" mention
+  // (e.g. "no remote" must not read as remote-eligible).
+  if (EXPLICIT_ONSITE_RE.test(description)) return 'EXPLICIT_ONSITE_NON_AUSTIN'
+  if (REMOTE_DESC_RE.test(description)) return 'REMOTE_ELIGIBLE'
+  return 'UNCLEAR'
+}
+
 // ── Shared scoring helper ─────────────────────────────────────────────────────
 
 const SCORING_PROMPT = `You are scoring a job posting for Sam Manning.
 
 STEP 1 — LOCATION GATE (evaluate before anything else):
-Is this role on-site or hybrid AND located outside the Austin, TX metro area (outside the 35-mile commute radius from Georgetown, TX 78626) AND does it not explicitly state remote work is available?
-If YES to all three: output {"score": 0, "label": "Excluded - relocation required", "summary": "Role requires relocation outside Austin TX commute area. Hard filter applied."} and stop immediately.
-Austin-metro and hybrid roles are NOT excluded here — they proceed to Step 2.
+Each job includes a LOCATION PRE-CHECK line computed deterministically in code from the source's structured location fields and explicit posting language. It is authoritative — apply it exactly as follows:
+- REMOTE_ELIGIBLE or AUSTIN_METRO: the location gate is PASSED. Do NOT exclude this role for relocation under any circumstances. Proceed to Step 2. This overrides any location-gate instruction elsewhere in your instructions.
+- EXPLICIT_ONSITE_NON_AUSTIN: output {"score": 0, "label": "Excluded - relocation required", "summary": "Role requires relocation outside Austin TX commute area. Hard filter applied."} and stop immediately.
+- UNCLEAR: exclude ONLY if the DESCRIPTION text explicitly states the role is on-site or hybrid at a specific location outside the Austin TX metro (35-mile commute radius from Georgetown TX 78626) with no remote option. A location field naming a city is NOT sufficient by itself — job boards geocode remote roles to cities, and descriptions may be truncated. If the description is silent or ambiguous about work arrangement, do NOT exclude: proceed to Step 2 and score Remote/location as Tier 3 (6 pts), flagging the summary with "[Manual review: location policy unclear]".
 
 STEP 2 — Only if the role passed Step 1, check hard exclusions:
 Clayton Korte (any title) or a Clayco direct-employee conversion: output {"score": 0, "label": "Disqualified", "summary": "Excluded company. Hard filter applied."} and stop.
@@ -58,7 +88,7 @@ STEP 3 — Only if the role passed Steps 1-2, score it 0–100 using this rubric
 - Remote/location (15 pts max):
     TIER 1 — 15 pts: Fully remote, no office requirement.
     TIER 2 — 12 pts: Austin-based or hybrid within 35 miles of Georgetown TX (78626). Cities in range: Austin, Round Rock, Cedar Park, Leander, Georgetown, Pflugerville, Hutto, Taylor, Buda, Kyle, San Marcos. Role must be hybrid or flexible — not 5 days/week in office.
-    TIER 3 — 6 pts: Austin-area role with unclear or unstated remote/hybrid policy. Flag summary with "[Manual review: location policy unclear]". Do NOT score 0 for ambiguity — default to 6.
+    TIER 3 — 6 pts: Role with unclear or unstated remote/hybrid policy (including any role that reached this step with LOCATION PRE-CHECK: UNCLEAR). Flag summary with "[Manual review: location policy unclear]". Do NOT score 0 for ambiguity — default to 6.
     TIER 4 — 0 pts: Requires relocation outside the Austin metro, OR mandates 5-day in-office attendance regardless of location.
 - Compensation signal (15 pts max): $180K+ stated = 13-15. $150-180K = 9-12. $120-150K with equity = 4-8. Below $120K = 0-3.
 - Build ownership (10 pts max): Owns building from zero = 9-10. Significant build component = 6-8. Some tooling work = 3-5. Advisory/management only = 0-2.
@@ -76,6 +106,7 @@ async function scoreJobWithClaude(
   if (isExcludedOpportunity(company, title, description)) return null
 
   const lane = laneForOpportunity(company, title)
+  const precheck = locationPrecheck(location, description)
 
   try {
     const message = await client.messages.create({
@@ -89,6 +120,7 @@ async function scoreJobWithClaude(
 JOB TITLE: ${title}
 COMPANY: ${company}
 LOCATION: ${location}
+LOCATION PRE-CHECK: ${precheck}
 DESCRIPTION: ${description}
 
 Return ONLY a JSON object, no markdown, no preamble:
@@ -271,7 +303,7 @@ async function scrapeVibeCodeCareers(client: Anthropic, sql: any, results: Resul
 
         const scored = await scoreJobWithClaude(client, title, company, 'Remote', description.slice(0, 2000))
         results.scored++
-        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
+        if (!scored || scored.score < 60) continue
 
         const slug = jobUrl.split('/job/')[1]?.replace(/\//g, '') || jobUrl
         const externalId = 'vcc-' + slug
@@ -363,7 +395,7 @@ async function fetchAshbyJobs(client: Anthropic, sql: any, results: Results) {
         const scored = await scoreJobWithClaude(
           client, job.title, company.name, jobLocation || 'Remote', description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', job.title, scored?.score, scored?.label); continue }
+        if (!scored || scored.score < 60) continue
         results.scored++
 
         await sql`
@@ -447,7 +479,7 @@ async function fetchLeverJobs(client: Anthropic, sql: any, results: Results) {
         const scored = await scoreJobWithClaude(
           client, job.text, company.name, jobLocation, description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', job.text, scored?.score, scored?.label); continue }
+        if (!scored || scored.score < 60) continue
         results.scored++
 
         await sql`
@@ -520,7 +552,7 @@ async function fetchGreenhouseJobs(client: Anthropic, sql: any, results: Results
         const scored = await scoreJobWithClaude(
           client, job.title, company.name, jobLocation, description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', job.title, scored?.score, scored?.label); continue }
+        if (!scored || scored.score < 60) continue
         results.scored++
 
         await sql`
@@ -548,6 +580,19 @@ async function fetchGreenhouseJobs(client: Anthropic, sql: any, results: Results
 }
 
 // ── AEC Tech Jobs RSS fetcher ─────────────────────────────────────────────────
+
+// The aectechjobs Substack feed mixes job postings ("Senior Estimator at Turner")
+// with newsletter/blog posts ("A Holiday Thank You (and what's ahead in 2026)",
+// "Why Not You?"). Filter out items that have neither a "<Title> at <Company>"
+// structure nor any recognizable role keyword — conservative on purpose so a
+// real posting with an unusual title is not dropped.
+const AEC_ROLE_KEYWORD_RE = /\b(engineer|analyst|manager|developer|designer|director|specialist|coordinator|estimator|architect|scientist|consultant|lead|bim|vdc|precon(?:struction)?|product|superintendent|technologist)\b/i
+
+function isLikelyNewsletterItem(title: string): boolean {
+  const hasAtCompany = /\bat\s+\S+/i.test(title)
+  const hasRoleKeyword = AEC_ROLE_KEYWORD_RE.test(title)
+  return !hasAtCompany && !hasRoleKeyword
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchAecTechJobsRSS(client: Anthropic, sql: any, results: Results) {
@@ -578,6 +623,7 @@ async function fetchAecTechJobsRSS(client: Anthropic, sql: any, results: Results
       if (!titleMatch || !linkMatch) continue
 
       const title = titleMatch[1].trim()
+      if (isLikelyNewsletterItem(title)) continue
       const url = linkMatch[1].trim()
       const rawDesc = descMatch ? descMatch[1] : ''
       const description = rawDesc
@@ -598,7 +644,7 @@ async function fetchAecTechJobsRSS(client: Anthropic, sql: any, results: Results
       const scored = await scoreJobWithClaude(
         client, jobTitle, company, 'Remote', description.slice(0, 2000)
       )
-      if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
+      if (!scored || scored.score < 60) continue
       results.scored++
 
       await sql`
@@ -785,7 +831,7 @@ async function fetchYCFallback(client: Anthropic, sql: any, results: Results) {
         const scored = await scoreJobWithClaude(
           client, title, company, 'Remote', description.slice(0, 2000)
         )
-        if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
+        if (!scored || scored.score < 60) continue
         results.scored++
 
         await sql`
@@ -870,7 +916,7 @@ async function fetchYCJobs(client: Anthropic, sql: any, results: Results) {
       const scored = await scoreJobWithClaude(
         client, title, company, 'Remote', description.slice(0, 2000)
       )
-      if (!scored || scored.score < 60) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
+      if (!scored || scored.score < 60) continue
       results.scored++
 
       await sql`
@@ -953,7 +999,7 @@ export async function GET(request: NextRequest) {
             description.slice(0, 2000)
           )
           results.scored++
-          if (!scored || scored.score < 70) { console.log('SCORE DEBUG:', title, scored?.score, scored?.label); continue }
+          if (!scored || scored.score < 70) continue
 
           const salaryMin = job.salary_min ? Math.round(job.salary_min) : null
           const salaryMax = job.salary_max ? Math.round(job.salary_max) : null
