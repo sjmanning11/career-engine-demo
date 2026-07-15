@@ -17,7 +17,7 @@ export type LocationPrecheck =
   | 'UNCLEAR'
 
 const REMOTE_LOCATION_RE = /\b(remote|anywhere|distributed|worldwide|global|telecommute)\b/i
-const AUSTIN_METRO_RE = /\b(austin|georgetown|round rock|cedar park|leander|pflugerville|hutto|taylor|buda|kyle|san marcos)\b/i
+const AUSTIN_METRO_RE = /\b(austin|georgetown|round rock|cedar park|taylor|pflugerville)\b/i
 const EXPLICIT_ONSITE_RE = /\b(relocation\s+(?:is\s+)?required|must\s+relocate|willing\s+to\s+relocate|on-?site\s+(?:only|required)|in-?office\s+(?:only|required)|no\s+remote)\b/i
 const REMOTE_DESC_RE = /\b(remote|work[- ]from[- ]home|work[- ]from[- ]anywhere|wfh|telecommute|fully distributed)\b/i
 

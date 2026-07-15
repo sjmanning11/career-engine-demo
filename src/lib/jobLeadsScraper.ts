@@ -68,9 +68,8 @@ export function isAustinOrRemote(locationString: string, isRemote: boolean): boo
   const loc = locationString.toLowerCase()
   const remoteKeywords = ['remote', 'anywhere', 'distributed', 'worldwide', 'global']
   const austinKeywords = [
-    'austin', 'georgetown', 'round rock', 'cedar park', 'leander',
-    'pflugerville', 'hutto', 'taylor', 'buda', 'kyle', 'san marcos',
-    'texas', ' tx',
+    'austin', 'georgetown', 'round rock', 'cedar park',
+    'pflugerville', 'taylor',
   ]
   return (
     remoteKeywords.some(k => loc.includes(k)) ||
